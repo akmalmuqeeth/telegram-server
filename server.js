@@ -73,7 +73,7 @@ app.get('/api/posts/', function getAllPosts(req,res){
         result.posts.push(posts[i]);
     }
   }
-  logger.info("retrieved user:", user, "posts : ", result.posts);
+  logger.info("retrieved user:", userId, "posts : ", result.posts);
   return res.send(result);
   } else {
     logger.info("retreived all posts", posts);
