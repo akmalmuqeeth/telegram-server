@@ -22,16 +22,16 @@ app.get('/api/users/', function getAllUsers (req,res) {
     logger.info("attempting login . username: ",
         req.query.username, " password: ", req.query.password);
     var user = getUser(users, req.query.username);
-      if( user && user.password  == req.query.password) {
-        logger.info('login successful. User : ', user);
-        return res.send({users : [user]});
+    if( user && user.password  == req.query.password) {
+      logger.info('login successful. User : ', user);
+      return res.send({users : [user]});
     } else {
-        logger.error('login failed for username: ', req.query.username);
+      logger.error('login failed for username: ', req.query.username);
       res.status(404).end();
     }
-    } else { // return all the users
+  } else { // return all the users
     logger.info("retrieved users: ", users);
-      return res.send({users : users});
+    return res.send({users : users});
   }
 });
 
@@ -61,7 +61,6 @@ app.post('/api/users/', function addUser(req, res){
     logger.error("failed to add user with req: " , req.body);
     res.status(404).end();    
   }
-  
 });
 
 //get all posts for user
@@ -70,7 +69,7 @@ app.get('/api/posts/', function getAllPosts(req,res){
   var userId = req.query.userId;
   if (userId) {
     for ( var i=0; i< posts.length; i++ ) {
-      if(posts[i].author == userId){
+      if( posts[i].author === userId) {
         result.posts.push(posts[i]);
     }
   }
@@ -87,7 +86,7 @@ app.post('/api/post', function addPost(req, res){
   logger.info("attempting to add post : ", req.body);
   //if no user exists, return 404
   var user = getUser(users, req.body.author);
-  if (!user){
+  if (!user) {
     logger.error("failed to add post. user: "
       ,req.body.author, "does not exist");
     res.status(404).end();
