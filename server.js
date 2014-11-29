@@ -19,14 +19,14 @@ var posts = [{author: 'akmal', body:'my first post', date: Date.now()},
 app.get('/api/users/', function getAllUsers (req,res) {
   var operation = req.query.operation;
   if(operation && operation == 'login') {
-  	logger.info("attempting login . username: ",
-  	 req.query.username, " password: ", req.query.password);
+    logger.info("attempting login . username: ",
+        req.query.username, " password: ", req.query.password);
     var user = getUser(users, req.query.username);
       if( user && user.password  == req.query.password) {
-      	logger.info('login successful. User : ', user);
-	    return res.send({users : [user]});
+        logger.info('login successful. User : ', user);
+        return res.send({users : [user]});
 	  } else {
-	  	logger.error('login failed for username: ', req.query.username);
+        logger.error('login failed for username: ', req.query.username);
 	    res.status(404).end();
 	  }
     } else { // return all the users
