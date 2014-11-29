@@ -13,36 +13,35 @@ var posts = [{author: 'akmal', body:'my first post', date: Date.now()},
 
 // Route implementations
 // get all users, supports login operation
-app.get('/api/users/', function(req,res){
-	var result = {users : []};
+app.get('/api/users/', function getAllUsers(req,res){
 	var operation = req.query.operation;
 	if(operation && operation == 'login') {
 		var user = getUser(users, req.query.username);
-		if(user && user.password  == req.query.password) {
-			return res.send(user);
+		if( user && user.password  == req.query.password) {
+			return res.send({users : [user]});
 		} else {
 			res.status(404).end();
 		}
 	} else { // return all the users
-		result.users = users;
-		return res.send(result);
+		return res.send({users : users});
 	}
 });
 
 //get user by id
-app.get('/api/users/:userId', function(req, res){
+app.get('/api/users/:userId', function getUserById(req, res) {
 	var user = getUser(users, req.params.userId)
-	if(user){
-		return res.send(user);
+	if (user) {
+		return res.send({users : [user]});
 	} else {
 		res.status(404).end();
 	}
 });
 
 //add user
-app.post('/api/users/', function(req, res){
+app.post('/api/users/', function addUser(req, res){
 	if(req.body){
-		var user = {id:req.body.id, password:req.body.password,name: req.body.name, email : req.body.email};
+		var user = {id:req.body.id, password:req.body.password,
+			name: req.body.name, email : req.body.email};
 		users.push(user);
 		return res.send({user: user});
 	}
@@ -51,7 +50,7 @@ app.post('/api/users/', function(req, res){
 });
 
 //get all posts for user
-app.get('/api/posts/', function(req,res){
+app.get('/api/posts/', function getAllPosts(req,res){
 	var result = {posts : []};
 	var userId = req.query.userId;
 	if(userId){
@@ -67,29 +66,28 @@ app.get('/api/posts/', function(req,res){
 });
 
 //add a post
-app.post('/api/post', function(req, res){
+app.post('/api/post', function addPost(req, res){
 	//if no user exists, return 404
 	var user = getUser(users, req.body.author);
 	if(!user){
 		res.status(404).end();
 		return;
 	}
-
-	var post = {author: req.body.author, body:req.body.body, date: Date.now()};
+	var post = {author: req.body.author, body:req.body.body, 
+		date: Date.now()};
 	posts.push(post);
-	return res.send(post);
+	return res.send({posts : [post]});
 });
 
-var getUser = function(users, userId){
-	for(var i=0;i<users.length;i++){
+var getUser = function ( users, userId ) {
+	for ( var i=0; i<users.length; i++) {
 		var result = {};
-		if(users[i].id == userId) {
+		if (users[i].id === userId) {
 			return users[i];
 		}
 	}
 	return null;
 }
-
 
 var server = app.listen(3000, function() {
 	console.log('Listening on port %d', server.address().port);
