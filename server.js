@@ -25,14 +25,14 @@ app.get('/api/users/', function getAllUsers (req,res) {
       if( user && user.password  == req.query.password) {
         logger.info('login successful. User : ', user);
         return res.send({users : [user]});
-	  } else {
+    } else {
         logger.error('login failed for username: ', req.query.username);
-	    res.status(404).end();
-	  }
+      res.status(404).end();
+    }
     } else { // return all the users
-	  logger.info("retrieved users: ", users);
+    logger.info("retrieved users: ", users);
       return res.send({users : users});
-	}
+  }
 });
 
 //get user by id
@@ -40,10 +40,10 @@ app.get('/api/users/:userId', function getUserById (req, res) {
   logger.info("attempting to retrieve user with userId: ", req.params.userId);
   var user = getUser(users, req.params.userId)
   if (user) {
-  	logger.info("retrieved user: ", user);
+    logger.info("retrieved user: ", user);
     return res.send({users : [user]});
   } else {
-  	logger.error('getUserById. failed to retrieve user', req.params.userId);
+    logger.error('getUserById. failed to retrieve user', req.params.userId);
     res.status(404).end();
   }
 });
@@ -58,8 +58,8 @@ app.post('/api/users/', function addUser(req, res){
    logger.info("user added successfully : ", user);
    return res.send({user: user});
   } else {
-  	logger.error("failed to add user with req: " , req.body);
-    res.status(404).end();  	
+    logger.error("failed to add user with req: " , req.body);
+    res.status(404).end();    
   }
   
 });
@@ -77,8 +77,8 @@ app.get('/api/posts/', function getAllPosts(req,res){
   logger.info("retrieved user:", user, "posts : ", result.posts);
   return res.send(result);
   } else {
-  	logger.info("retreived all posts", posts);
-    return res.send({posts : posts});	
+    logger.info("retreived all posts", posts);
+    return res.send({posts : posts});  
   }
 });
 
@@ -88,8 +88,8 @@ app.post('/api/post', function addPost(req, res){
   //if no user exists, return 404
   var user = getUser(users, req.body.author);
   if (!user){
-  	logger.error("failed to add post. user: "
-  		,req.body.author, "does not exist");
+    logger.error("failed to add post. user: "
+      ,req.body.author, "does not exist");
     res.status(404).end();
     return;
   }
@@ -111,6 +111,6 @@ var getUser = function ( users, userId ) {
 }
 
 var server = app.listen(3000, function() {
-	console.log('Listening on port %d', server.address().port);
+  console.log('Listening on port %d', server.address().port);
 });
 
