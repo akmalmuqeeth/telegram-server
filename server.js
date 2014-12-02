@@ -1,5 +1,13 @@
 var express = require('express');
 var app = express();
+
+//temp data
+var users = [{id:'akmal', password:'test',name: 'AM', email : 'a@m.com'},
+  {id:'bob', password:'test2',name: 'BOB rob', email : 'bob@r.com'}];
+var posts = [{author: 'akmal', body:'my first post', date: Date.now()},
+  {author: 'akmal', body:'my second post', date: Date.now()},
+  {author: 'bob', body:'roberts first post', date: Date.now()}];
+
 // body parser to parse post body to JSON
 var bodyParser = require('body-parser');
 app.use(bodyParser.json());
@@ -23,6 +31,8 @@ app.use(expressSession({
 app.use(passport.initialize());
 app.use(passport.session());
 
+/* register a serializeUser function, which tells passport which unique
+ information from the user object it should use to create the cookie */
 passport.serializeUser(function(user, done){
   logger.debug('serializing: ', user.id);
   done(null, user.id);
@@ -38,45 +48,44 @@ passport.deserializeUser(function(id, done){
 passport.use(new passportLocal.Strategy(function (username, password, done){
   logger.info("username: ", username, "password", password);
   var user = getUser(users, username);
-  if(user) { //authentication successful
+  if(user && user.password == password) { //authentication successful
     done(null, user);
   } else { // authentication failed
-  	done(new Error('failed to authenticate'));
+   done(null, null, 'user not found');
   } 
 }));
 
-
-//temp data
-var users = [{id:'akmal', password:'test',name: 'AM', email : 'a@m.com'},
-  {id:'bob', password:'test2',name: 'BOB rob', email : 'bob@r.com'}];
-var posts = [{author: 'akmal', body:'my first post', date: Date.now()},
-  {author: 'akmal', body:'my second post', date: Date.now()},
-  {author: 'bob', body:'roberts first post', date: Date.now()}];
-
 // Route implementations
 // get all users, supports login operation
-app.get('/api/users/', passport.authenticate('local'), function getAllUsers (req,res) {
-  logger.debug("in getAllUSers");
-  if(req.isAuthenticated()) {
+app.get('/api/users/', function getAllUsers (req,res) {
     if(req.query.operation == 'login'){
-      return res.send({users : [req.user]});
+      logger.info("attempting to login");
+      // authenticate using passport's custom callback
+      passport.authenticate('local', function(err, user, info) {
+        if (err) { 
+          return res.status(500).end(); 
+        }
+        if (!user) { 
+          return res.status(404).end(); 
+        }
+        // request's login method sets the cookie, using the serialize function
+        req.logIn(user, function(err) { 
+          if (err) { 
+            return res.status(500).end();
+          }
+          return res.send({users : [user]});
+
+        });
+      })(req, res);
+ 
     } else { //return all users
-   	  logger.debug("retrieving all users");
+       logger.debug("retrieving all users");
       return res.send({users : users});
-    }
-  } else {
-  	//redirect to login
-  	res.status(401).end();
-  }
+    }  
 });
 
 //get user by id
-app.get('/api/users/:userId', passport.authenticate('local'),function getUserById (req, res) {
-  if(req.isAuthenticated()) {
-  	logger.info('getUserById user is authentciated');
-  } else {
-  	logger.info("user not authentciated")
-  }
+app.get('/api/users/:userId', function getUserById (req, res) {
   logger.info("attempting to retrieve user with userId: ", req.params.userId);
   var user = getUser(users, req.params.userId)
   if (user) {
@@ -103,8 +112,10 @@ app.post('/api/users/', function addUser(req, res){
   }
 });
 
-//get all posts for user
-app.get('/api/posts/', function getAllPosts(req,res){
+/* get all posts for user 
+   if request has userId param then returns posts for the user 
+*/
+app.get('/api/posts/', ensureAuthenticated, function getAllPosts(req,res){
   var result = {posts : []};
   var userId = req.query.userId;
   if (userId) {
@@ -121,22 +132,29 @@ app.get('/api/posts/', function getAllPosts(req,res){
   }
 });
 
-//add a post
-app.post('/api/post', function addPost(req, res){
-  logger.info("attempting to add post : ", req.body);
-  //if no user exists, return 404
-  var user = getUser(users, req.body.author);
-  if (!user) {
-    logger.error("failed to add post. user: "
-      ,req.body.author, "does not exist");
-    res.status(404).end();
-    return;
+function ensureAuthenticated(req, res, next){
+  logger.info("ensureAuthenticated");
+  if(req.isAuthenticated()){
+    next();
+  } else {
+    res.status(403).end();
   }
+}
+
+//add a post
+app.post('/api/post', ensureAuthenticated, function addPost(req, res){
+  logger.info("attempting to add post : ", req.body);
+
+  if(req.user.id != req.body.author) {
+      logger.error("failed to add post. user: ",req.body.author, "does not exist");
+    return res.status(404).end();
+  }
+  
   var post = {author: req.body.author, body:req.body.body, 
               date: Date.now()};
   posts.push(post);
   logger.info("post successfully added , post : ", post);
-  return res.send({posts : [post]});
+  return res.send({post : post});
 });
 
 var getUser = function ( users, userId ) {
