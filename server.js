@@ -55,6 +55,26 @@ passport.use(new passportLocal.Strategy(function (username, password, done) {
   } 
 }));
 
+var mongoose = require('mongoose');
+mongoose.connect('mongodb://localhost/telegramDb');
+var db = mongoose.connection;
+var UserModel;
+db.on('error', console.error.bind(console, 'connection error:'));
+db.once('open', function callback () {
+  console.log("Connected to telegramDb");
+
+  var userSchema = mongoose.Schema(
+  	{
+  		id : String,
+  		password: String,
+  		name: String,
+  		email: String
+  	});
+
+   UserModel = mongoose.model('User', userSchema);
+});
+
+
 // Route implementations
 // get all users, supports login operation
 app.get('/api/users/', function getAllUsers (req,res) {
@@ -98,10 +118,15 @@ app.get('/api/users/:userId', function getUserById (req, res) {
 app.post('/api/users/', function addUser(req, res) {
   logger.info("attempting to add user with req: ", req.body);
   if (req.body) {
-   var user = {id:req.body.id, password:req.body.password,
-              name: req.body.name, email : req.body.email};
-   users.push(user);
-   logger.info("user added successfully : ", user);
+   var user = new UserModel({id:req.body.id,password:req.body.password, 
+   	name: req.body.name, email : req.body.email});
+   
+   user.save(function(err, user){
+     if(err) return console.log(err);
+     console.log("user saved successfully");
+   });
+
+   //logger.info("user added successfully : ", user);
    return res.send({user: user});
   } else {
     logger.error("failed to add user with req: " , req.body);
