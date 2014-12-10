@@ -1,13 +1,6 @@
 var express = require('express');
 var app = express();
 
-//temp data
-var users = [{id:'akmal', password:'test',name: 'AM', email : 'a@m.com'},
-  {id:'bob', password:'test2',name: 'BOB rob', email : 'bob@r.com'}];
-var posts = [{author: 'akmal', body:'my first post', date: Date.now()},
-  {author: 'akmal', body:'my second post', date: Date.now()},
-  {author: 'bob', body:'roberts first post', date: Date.now()}];
-
 // body parser to parse post body to JSON
 var bodyParser = require('body-parser');
 app.use(bodyParser.json());
@@ -41,37 +34,60 @@ passport.serializeUser(function(user, done){
 passport.deserializeUser(function(id, done){
   // query database to fetch the user based on id
   logger.debug('de-serializing: ', id);
-  var user = getUser(users, id);
-  done(null, {id: id, name: user.name, email: user.email});
+  UserModel.findOne({id: id}, function(err, doc){
+    done(null, doc);
+  });
+  
 });
 
 passport.use(new passportLocal.Strategy(function (username, password, done) {
   logger.info("username: ", username, "password", password);
-  var user = getUser(users, username);
-  if(user && user.password == password) { //authentication successful
-    done(null, user);
-  } else { // authentication failed
-    done(null, null, 'user not found');
-  } 
+  
+  UserModel.findOne({id : username}, function(err, user){
+      logger.debug(err, user);
+      if(err) return done(err, null);
+      if(!user) return done(null,null, "user not found");
+      if(user.password == password) { //authentication successful
+        done(null, user);
+      } else { // authentication failed
+        done(null, null, 'password not matched');
+      } 
+  });  
 }));
 
 var mongoose = require('mongoose');
-mongoose.connect('mongodb://localhost/telegramDb');
-var db = mongoose.connection;
-var UserModel;
-db.on('error', console.error.bind(console, 'connection error:'));
-db.once('open', function callback () {
-  console.log("Connected to telegramDb");
-  var userSchema = mongoose.Schema(
+/* connect creates default connection
+you could also use mongoose.connect here, but that would create an
+ internal default pool of connections*/
+var db = mongoose.createConnection('mongodb://localhost/telegramDb');
+// make meaning/description out of the data
+var userSchema = mongoose.Schema(
     {
       id : String,
       password: String,
       name: String,
       email: String
     });
-  UserModel = mongoose.model('User', userSchema);
-});
+//a connection or a pipe to the db
+var UserModel = db.model('User', userSchema);
 
+var postSchema = mongoose.Schema(
+  {
+     author : String,
+     body : String,
+     date : Date
+  });
+
+var PostModel = db.model('Post', postSchema);
+
+db.on('error', console.error.bind(console, 'connection error:'));
+db.once('open', function callback () {
+  console.log("Connected to telegramDb");
+  // start the node server when the db is ready
+  app.listen(3000, function() {
+    console.log('Server started');
+  });
+});
 
 // Route implementations
 // get all users, supports login operation
@@ -83,33 +99,39 @@ app.get('/api/users/', function getAllUsers (req,res) {
         if (err)
           return res.status(500).end(); 
         if (!user)
-          return res.status(404).end();
-
-        // request's login method sets the cookie, using the serialize function
+          return res.status(404).send(info);
+        /* user is authenticated at this point but a cookie is not created, 
+           use the login method in the request object to serialize the user 
+           and create the cookie */
         req.logIn(user, function(err) { 
           if (err) { 
             return res.status(500).end();
           }
-          return res.send({users : [user]});
+          var emberuser = makeEmberUser(user);
+          logger.debug(emberuser);
+          return res.send({users : [emberuser]});
         });
       })(req, res);
     } else { //return all users
        logger.debug("retrieving all users");
-      return res.send({users : users});
+       UserModel.find({}, function(err, users){
+        if(err) return res.status(500).end();
+        var emberUsers = users.map(function(user) {
+          return makeEmberUser(user);
+        });
+        return res.send({users : emberUsers});
+       });
+      
     }  
 });
 
 //get user by id
 app.get('/api/users/:userId', function getUserById (req, res) {
   logger.info("attempting to retrieve user with userId: ", req.params.userId);
-  var user = getUser(users, req.params.userId)
-  if (user) {
-    logger.info("retrieved user: ", user);
-    return res.send({users : [user]});
-  } else {
-    logger.error('getUserById. failed to retrieve user', req.params.userId);
-    res.status(404).end();
-  }
+  UserModel.findOne({id : req.params.userId }, function(err, user) {
+     if (err) return res.status(500).send('error getting user by id');
+     return res.send({users : [user]});
+  });
 });
 
 //add user
@@ -118,37 +140,41 @@ app.post('/api/users/', function addUser(req, res) {
   if (req.body) {
    var user = new UserModel({id:req.body.id,password:req.body.password, 
    	name: req.body.name, email : req.body.email});
-   
    user.save(function(err, user){
-     if(err) return console.log(err);
+     if(err) {
+      logger.error(err);
+      return res.status(500).end();
+     }
      console.log("user saved successfully");
+     //login the user
+     req.logIn(user, function(err) { 
+          if (err) { 
+            return res.status(500).end();
+          }
+          return res.send({user: makeEmberUser(user)});
+        });
    });
-
-   //logger.info("user added successfully : ", user);
-   return res.send({user: user});
   } else {
     logger.error("failed to add user with req: " , req.body);
     res.status(404).end();    
   }
 });
 
-/* get all posts for user 
-   if request has userId param then returns posts for the user 
-*/
+/* get all posts for user - if request has userId param then returns posts for
+   the user */
 app.get('/api/posts/', ensureAuthenticated, function getAllPosts(req,res){
-  var result = {posts : []};
   var userId = req.query.userId;
   if (userId) {
-    for ( var i=0; i< posts.length; i++ ) {
-      if( posts[i].author === userId) {
-        result.posts.push(posts[i]);
-    }
-  }
-  logger.info("retrieved user:", userId, "posts : ", result.posts);
-  return res.send(result);
-  } else {
-    logger.info("retreived all posts", posts);
-    return res.send({posts : posts});  
+    PostModel.find({author: userId}, function(err, posts){
+      if(err) return res.status(500).send('Error retrieving users posts');
+      logger.info("retrieved user:", userId, "posts : ", posts);
+      return res.send({posts : posts}); 
+    });
+  } else { //return all posts from all users
+    PostModel.find({}, function(err, posts){
+      if(err) return res.status(500).send('Error retrieving all posts');
+      return res.send({posts : posts}); 
+    });     
   }
 });
 
@@ -156,24 +182,25 @@ app.get('/api/posts/', ensureAuthenticated, function getAllPosts(req,res){
 app.post('/api/post', ensureAuthenticated, function addPost(req, res){
   logger.info("attempting to add post : ", req.body);
   if(req.user.id != req.body.author) {
-      logger.error("failed to add post. user: ",req.body.author, "does not exist");
-    return res.status(404).end();
+      logger.error("unauthorized post attempt by user: ",req.user.id);
+    return res.status(403).send('you do not have permission to add post for ' +req.body.author);
   }
-  var post = {author: req.body.author, body:req.body.body, 
-              date: Date.now()};
-  posts.push(post);
-  logger.info("post successfully added , post : ", post);
-  return res.send({post : post});
+  var post = new PostModel({author: req.body.author, body:req.body.body, 
+              date: Date.now()});
+  post.save(function(err, user){
+    if(err) {
+      logger.error(err);
+      return res.status(500).end();
+     }
+     logger.info("post successfully added , post : ", post);
+     return res.send({post : post});
+  });  
 });
 
-var getUser = function ( users, userId ) {
-  for ( var i=0; i<users.length; i++ ) {
-    var result = {};
-    if (users[i].id === userId) {
-      return users[i];
-    }
-  }
-  return null;
+/* utility function to strip any sensitive information from the user object
+   before passing it over the wire*/
+function makeEmberUser(user) {
+   return {username: user.id, email: user.email};
 }
 
 function ensureAuthenticated(req, res, next){
@@ -184,6 +211,3 @@ function ensureAuthenticated(req, res, next){
     res.status(403).end();
   }
 }
-var server = app.listen(3000, function() {
-  console.log('Listening on port %d', server.address().port);
-});
